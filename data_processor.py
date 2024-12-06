@@ -5,8 +5,30 @@ import pickle
 from tqdm import tqdm
 from scipy import spatial
 '''
+0 frame_id
+1 object_id
+2 object_type
+3 position_x
+4 position_y
+5 position_z
+6 object_length
+7 pbject_width
+8 pbject_height
+9 heading
+
+0 time 
+1 id 
+2 x 
+3 y 
+4 heading 
+5 type 
+6 length 
+7 width
+
+
+
 # Baidu ApolloScape data format:
-    frame_id, object_id, object_type, position_x, position_y, position_z,object_length, pbject_width, pbject_height, heading
+    frame_id, object_id, object_type, position_x, position_y, position_z,object_length, object_width, object_height, heading
     Read data from $pra_file_path, and split data into clips with $total_frames length. 
             feture: (T, V ,C) 
                     C is the dimension of features, x,y label
@@ -15,7 +37,7 @@ from scipy import spatial
 '''
 
 # Please change this to your location
-data_root = './data/ApolloScape/'
+data_root = './data/train/' # 
 
 # 3 second * 2 frame/second
 history_frames = 6
@@ -23,11 +45,29 @@ history_frames = 6
 future_frames = 6
 total_frames = history_frames + future_frames
 frame_step=1
-feature_id=[3,4,2,9,6,7]
+feature_id =  [2,3,5,4,6,7]
+# feature_id=[3,4,2,9,6,7]
 max_object_nums=115
 neighbor_distance = 15
 
+
 def GenerateData(file_path_list, data_root, is_train=True):
+    """
+    parameter: 
+        is_train: 
+
+    pickeld[0][i].keys() 
+
+    return one nparray of dicts for each train/test set with 4 or 5 things: 
+        features: 3D tensor 12x115x8
+            - temporal length of data (history_frames + future_frames) ==> 6 +6
+            - max number of objects (zero-padding for less objects) ==> 115
+            - 5 features + x & y label, 
+        masks:  12x115x1
+        mean: mean_xy
+        origin: only for validation/testing, 
+        neighbors: 15 m mask. 12x115x115
+    """
     all_data = []
     # max_object=[]
 
@@ -35,23 +75,22 @@ def GenerateData(file_path_list, data_root, is_train=True):
         # print(file_path_idx)
         with open(file_path_idx, 'r') as reader:
             content = np.array([x.strip().split(' ') for x in reader.readlines()]).astype(float)
-
         scene_frames = content[:, 0].astype(np.int64)        
-        unique_frames = sorted(np.unique(scene_frames).tolist())
+        unique_frames = sorted(np.unique(scene_frames).tolist()	)
         if is_train:
-            start_frame_ids = unique_frames[:-total_frames+1]
+            start_frame_ids = unique_frames[:-total_frames+1] # ignore last 12 frames
         else:
-            start_frame_ids = unique_frames[::history_frames]
+            start_frame_ids = unique_frames[::history_frames] # Take sample every 6 frames
         data_list=[]
 
-        for start_index in start_frame_ids:
+        for start_index in tqdm(start_frame_ids):
             if is_train:
-                sample_frames = np.arange(start_index, start_index + total_frames)
+                sample_frames = np.arange(start_index, start_index + total_frames) # list  (nparray) from 1 to 12
             else:
-                sample_frames = np.arange(start_index, start_index + history_frames)
-            sample_mask = np.any(scene_frames.reshape(-1, 1) == sample_frames.reshape(1, -1), axis=1)
+                sample_frames = np.arange(start_index, start_index + history_frames) 
+            sample_mask = np.any(scene_frames.reshape(-1, 1) == sample_frames.reshape(1, -1), axis=1) # time mask
             # sample_object_ids = np.sort(np.unique(content[sample_mask, 1].astype(np.int)))
-            sample_object_ids = np.unique(content[sample_mask, 1].astype(np.int))
+            sample_object_ids = np.unique(content[sample_mask, 1].astype(np.int64)) # 0,1
             # print(start_index,sample_object_ids)
             # le=len(sample_object_ids)
             # max_object.append(le)
@@ -60,18 +99,23 @@ def GenerateData(file_path_list, data_root, is_train=True):
             # print('mean_xy',mean_xy)
             
             if is_train:
-                neighbor_mask = np.zeros((total_frames, max_object_nums, max_object_nums), dtype=np.bool)
+                # neighbor_mask: 
+                # sample obj__input
+                # sample_obj_mask
+                # Sample mask orgin is not defined during training
+
+                neighbor_mask = np.zeros((total_frames, max_object_nums, max_object_nums), dtype=bool)
                 sample_object_input = np.zeros((total_frames, max_object_nums, len(feature_id)+2), dtype=np.float32)
-                sample_object_mask = np.zeros((total_frames, max_object_nums), dtype=np.bool)
+                sample_object_mask = np.zeros((total_frames, max_object_nums), dtype=bool)
             else:
-                neighbor_mask = np.zeros((history_frames, max_object_nums, max_object_nums), dtype=np.bool)
+
+                neighbor_mask = np.zeros((history_frames, max_object_nums, max_object_nums), dtype=bool)
                 sample_object_input = np.zeros((history_frames, max_object_nums, len(feature_id)+2), dtype=np.float32)
-                sample_object_mask = np.zeros((history_frames, max_object_nums), dtype=np.bool)
-                sample_object_origin = np.zeros((history_frames, max_object_nums, 3), dtype=np.int)
+                sample_object_mask = np.zeros((history_frames, max_object_nums), dtype=bool)
+                sample_object_origin = np.zeros((history_frames, max_object_nums, 3), dtype=np.int64)
 
             # for every frame
-            for frame_idx, frame in enumerate(sample_frames):
-                
+            for frame_idx, frame in enumerate(tqdm(sample_frames)):
                 exist_object_idx = []
                 for object_idx, object_id in enumerate(sample_object_ids):
                     # frame and object
@@ -83,9 +127,7 @@ def GenerateData(file_path_list, data_root, is_train=True):
                     obj_feature[:2]=obj_feature[:2]-mean_xy
                     sample_object_input[frame_idx, object_idx, :-2] = obj_feature
 
-                    # 在时间域内，某个障碍物在某段时间内存在
                     sample_object_mask[frame_idx, object_idx] = True
-
                     exist_object_idx.append(object_idx)
 
                     if not is_train:
@@ -104,8 +146,8 @@ def GenerateData(file_path_list, data_root, is_train=True):
                             abs(relative_cord[0]) > neighbor_distance) | (
                                 abs(relative_cord[1]) > neighbor_distance)
 
-
             # add speed x ,y in dim 4,5
+
             new_mask = (sample_object_input[1:, :, :2] != 0) * (sample_object_input[:-1, :, :2] != 0).astype(float)      
             sample_object_input[1:, :, -2:] = (
                 sample_object_input[1:, :, :2] - sample_object_input[:-1, :, :2]).astype(float) * new_mask
@@ -113,8 +155,7 @@ def GenerateData(file_path_list, data_root, is_train=True):
             
             sample_object_mask = np.expand_dims(sample_object_mask, axis=-1)
             # refine the future masks
-            # data['masks'].sum(axis=0) == history_frames表示如果过去帧都在
-            #表示在过去帧都存在的情况下对未来的掩码
+            # data['masks'].sum(axis=0) == history_framesh:Ç»'ý(
             if  is_train:
                 data = dict(
                     features=sample_object_input, masks=sample_object_mask, mean=mean_xy,
@@ -137,7 +178,6 @@ def GenerateData(file_path_list, data_root, is_train=True):
 
     all_data = np.array(all_data)  # Train 5010 Test 415
     print(np.shape(all_data))
-
     # save training_data and trainjing_adjacency into a file.
     if is_train:
         save_path=os.path.join(data_root, 'train_data.pkl')
@@ -151,7 +191,7 @@ if __name__ == '__main__':
     train_file_path_list = sorted(
         glob.glob(os.path.join(data_root, 'prediction_train/*.txt')))
     test_file_path_list = sorted(
-        glob.glob(os.path.join(data_root, 'prediction_test/*.txt')))
+        glob.glob(os.path.join(data_root, 'prediction_train/*.txt')))
 
     print('Generating Training Data.')
     GenerateData(train_file_path_list,data_root, is_train=True)
