@@ -36,6 +36,7 @@ def GenerateData(file_path_list, data_root, is_train=True):
         with open(file_path_idx, 'r') as reader:
             content = np.array([x.strip().split(' ') for x in reader.readlines()]).astype(float)
 
+        # Yash: First column is frame_id, second is object_id, third is object_type
         scene_frames = content[:, 0].astype(np.int64)        
         unique_frames = sorted(np.unique(scene_frames).tolist())
         if is_train:
