@@ -28,4 +28,4 @@ val_batch_size: 64
 val_test: false
 warmup: 5000
 weight_decay: 0.0001
-work_dir: /home/chen/prediction/apolloscape/s2tnet/s2tnet/checkpoints/apollo
+work_dir: /blue/anandr/yashranjan/code/s2tnet/checkpoints/apollo
