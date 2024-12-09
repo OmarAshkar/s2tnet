@@ -4,6 +4,32 @@ import os
 import pickle
 from tqdm import tqdm
 from scipy import spatial
+
+
+
+'''
+#Omar: AppolloScape data format:
+0 frame_id
+1 object_id
+2 object_type
+3 position_x
+4 position_y
+5 position_z
+6 object_length
+7 pbject_width
+8 pbject_height
+9 heading
+
+Our data format:
+0 time
+1 id
+2 x
+3 y
+4 heading
+5 type
+6 length
+7 width
+'''
 '''
 # Baidu ApolloScape data format:
     frame_id, object_id, object_type, position_x, position_y, position_z,object_length, pbject_width, pbject_height, heading
@@ -37,6 +63,7 @@ def GenerateData(file_path_list, data_root, is_train=True):
             content = np.array([x.strip().split(' ') for x in reader.readlines()]).astype(float)
 
         # Yash: First column is frame_id, second is object_id, third is object_type
+        # Yash: content has all the data from the file
         scene_frames = content[:, 0].astype(np.int64)        
         unique_frames = sorted(np.unique(scene_frames).tolist())
         if is_train:
@@ -45,35 +72,36 @@ def GenerateData(file_path_list, data_root, is_train=True):
             start_frame_ids = unique_frames[::history_frames]
         data_list=[]
 
+        # Yash: For each start frame
         for start_index in start_frame_ids:
             if is_train:
-                sample_frames = np.arange(start_index, start_index + total_frames)
+                sample_frames = np.arange(start_index, start_index + total_frames) # list  (nparray) from start_index to start_index+12
             else:
                 sample_frames = np.arange(start_index, start_index + history_frames)
-            sample_mask = np.any(scene_frames.reshape(-1, 1) == sample_frames.reshape(1, -1), axis=1)
-            # sample_object_ids = np.sort(np.unique(content[sample_mask, 1].astype(np.int)))
-            sample_object_ids = np.unique(content[sample_mask, 1].astype(np.int))
-            # print(start_index,sample_object_ids)
-            # le=len(sample_object_ids)
-            # max_object.append(le)
-            xy_coordinate=content[sample_mask, 3:5].astype(float)
-            mean_xy = np.mean(xy_coordinate, axis=0)
+            sample_mask = np.any(scene_frames.reshape(-1, 1) == sample_frames.reshape(1, -1), axis=1) # Yash: boolean array of frames in scene_frames that are in sample_frames
+
+            sample_object_ids = np.unique(content[sample_mask, 1].astype(np.int)) # Yash: All object ids that are present in atleast one of the frames in sample_frames
+
+            xy_coordinate=content[sample_mask, 3:5].astype(float) # Yash: Imp: Only takes the x and y coordinates of the objects, Shape: n*2
+            mean_xy = np.mean(xy_coordinate, axis=0) # Yash: Shape: 1*2
             # print('mean_xy',mean_xy)
             
             if is_train:
+                # Yash: For each start frame, create a neighbor mask, object input and object mask
                 neighbor_mask = np.zeros((total_frames, max_object_nums, max_object_nums), dtype=np.bool)
                 sample_object_input = np.zeros((total_frames, max_object_nums, len(feature_id)+2), dtype=np.float32)
-                sample_object_mask = np.zeros((total_frames, max_object_nums), dtype=np.bool)
+                sample_object_mask = np.zeros((total_frames, max_object_nums), dtype=np.bool) # Yash: To check if an object is present in a frame
             else:
                 neighbor_mask = np.zeros((history_frames, max_object_nums, max_object_nums), dtype=np.bool)
                 sample_object_input = np.zeros((history_frames, max_object_nums, len(feature_id)+2), dtype=np.float32)
                 sample_object_mask = np.zeros((history_frames, max_object_nums), dtype=np.bool)
                 sample_object_origin = np.zeros((history_frames, max_object_nums, 3), dtype=np.int)
 
-            # for every frame
+
+            # for every frame starting from startindex to start_index + 12 check if the object is present or not and for all the objects present in the frame, check if they are neighbors
             for frame_idx, frame in enumerate(sample_frames):
                 
-                exist_object_idx = []
+                exist_object_idx = [] # Yash: List of object indices that are present in the current frame
                 for object_idx, object_id in enumerate(sample_object_ids):
                     # frame and object
                     matched_obj = content[np.logical_and(content[:, 0] == frame, content[:, 1] == object_id)]
@@ -123,7 +151,7 @@ def GenerateData(file_path_list, data_root, is_train=True):
                 # data['masks'][history_frames-1:] = np.repeat(
                 #     np.expand_dims(data['masks'][:history_frames].sum(axis=0) == history_frames, axis=0),
                 #     history_frames+1, axis=0) & data['masks'][history_frames-1]
-                data['masks'] = data['masks'] & data['masks'][history_frames-1]
+                data['masks'] = data['masks'] & data['masks'][history_frames-1] #Yash: Did not get this
             else:
                 data = dict(
                     features=sample_object_input, masks=sample_object_mask, mean=mean_xy, 
