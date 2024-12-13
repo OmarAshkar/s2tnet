@@ -3,7 +3,7 @@ import sys
 import os
 from arg_types import arg_boolean, arg_dict
 
-dataset_name = 'apollo'
+dataset_name = 'train'
 home_dir = os.getcwd()
 
 
@@ -23,7 +23,7 @@ def get_parser():
         description='Spatial Temporal Graph Convolution Network')
     
     parser.add_argument('--work_dir', default=home_dir+'/checkpoints/' + dataset_name)
-    parser.add_argument('--config', default=home_dir+'/config/apolloscape/train.yaml')
+    parser.add_argument('--config', default=home_dir+'/config/train/train.yaml')
     parser.add_argument('--phase', default='train')
     parser.add_argument('--log_interval', type=int, default=100,
                         help='the interval for printing messages (#iteration)')

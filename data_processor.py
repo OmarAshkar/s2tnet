@@ -3,38 +3,8 @@ import glob
 import os
 import pickle
 from tqdm import tqdm
-from scipy import spatial
-'''
-0 frame_id
-1 object_id
-2 object_type
-3 position_x
-4 position_y
-5 position_z
-6 object_length
-7 pbject_width
-8 pbject_height
-9 heading
-
-0 time 
-1 id 
-2 x 
-3 y 
-4 heading 
-5 type 
-6 length 
-7 width
 
 
-
-# Baidu ApolloScape data format:
-    frame_id, object_id, object_type, position_x, position_y, position_z,object_length, object_width, object_height, heading
-    Read data from $pra_file_path, and split data into clips with $total_frames length. 
-            feture: (T, V ,C) 
-                    C is the dimension of features, x,y label
-                    T is the temporal length of the data. history_frames + future_frames
-                    V is the maximum number of objects. zero-padding for less objects. 
-'''
 
 # Please change this to your location
 data_root = './data/train/' # 
@@ -47,7 +17,7 @@ total_frames = history_frames + future_frames
 frame_step=1
 feature_id =  [2,3,5,4,6,7]
 # feature_id=[3,4,2,9,6,7]
-max_object_nums=115
+max_object_nums=50
 neighbor_distance = 15
 
 
@@ -94,7 +64,7 @@ def GenerateData(file_path_list, data_root, is_train=True):
             # print(start_index,sample_object_ids)
             # le=len(sample_object_ids)
             # max_object.append(le)
-            xy_coordinate=content[sample_mask, 3:5].astype(float)
+            xy_coordinate=content[sample_mask, 2:4].astype(float)
             mean_xy = np.mean(xy_coordinate, axis=0)
             # print('mean_xy',mean_xy)
             

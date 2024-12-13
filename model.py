@@ -12,7 +12,7 @@ from seq2seq_transformer import TransformerLayer, TransformerModel
 
 class s2tnet(nn.Module):
     def __init__(self, in_chans=6,output_chans=2, d_model=32, nhead=8, feedforward_ratio=1, drop_rate=0.1):
-        super().__init__()
+        super(s2tnet, self).__init__()
 
         self.input_embedding = Embeddings(in_chans, d_model)
         self.output_embedding = Embeddings(output_chans, d_model)
@@ -75,10 +75,7 @@ class s2tnet(nn.Module):
 
         # print(encoder_input_.shape,decoder_inputs.shape)
         encoder_inputs=self.input_embedding(encoder_input_)
-        # encoder_pe = self._pos_embed(encoder_inputs)
-        # encoder_inputs = encoder_inputs + encoder_pe
-        # encoder_inputs = self.pos_drop2(encoder_inputs)
-        # encoder_inputs = self.norm2(encoder_inputs)
+
     
         # # encoder 1
         for st_layer in self.Spatial_Tcn_blocks:

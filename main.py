@@ -26,6 +26,7 @@ localtime = time.asctime(time.localtime(time.time()))
 x_writer = SummaryWriter('writer/'+ localtime)
 test_result_file = 'prediction_result.txt'
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+dev_2 = "cuda"
 
 class Processor():
     """
@@ -91,10 +92,10 @@ class Processor():
          
             for current_frame in range(2, time_horizon):
                 predicted, _ = self.model(
-                    batch_in,current_frame,device,is_train = True)
+                    batch_in,current_frame,dev_2,is_train = True)
 
-                mask=masks[:, current_frame:].to(device)
-                ground_truth=features[:, current_frame:,:,-2:].to(device)
+                mask=masks[:, current_frame:].to(dev_2)
+                ground_truth=features[:, current_frame:,:,-2:].to(dev_2)
                 predict_traj = predicted * mask
                 ground_truth = ground_truth * mask
                 # backward
@@ -104,7 +105,7 @@ class Processor():
                 error=torch.abs(predict_traj - ground_truth) ** error_order
                 error = error.sum(dim=3).sum(dim=2)
                 overall_mask = mask.sum(dim=3).sum(dim=2)
-                loss = error.sum() / torch.max(overall_mask.sum(), torch.ones(1,).to(device))
+                loss = error.sum() / torch.max(overall_mask.sum(), torch.ones(1,).to(dev_2))
                 loss.backward()
 
                 # total_loss.backward()
@@ -123,8 +124,8 @@ class Processor():
                     x_writer.add_scalar('loss-Train', loss.data.item(), step)
                     if self.arg.optimizer == 'NoamOpt':
                         self.print_log(
-                        '\t|Epoch:{:>5}/{:>5}|\tIteration:{:>5}/{:>5}|\tLoss:{:.5f}|lr: {:.4f}|'.format(
-                        epoch, self.arg.num_epoch,batch_idx, len(loader), loss.data.item(), self.optim._rate))
+                        '\t|Epoch:{:>5}/{:>5}|\tIteration:{:>5}/{:>5}|\tFrames:{:>5}/{:>5}|\tLoss:{:.5f}|lr: {:.4f}|'.format(
+                        epoch, self.arg.num_epoch,batch_idx, len(loader),current_frame, time_horizon, loss.data.item(), self.optim._rate))
                     else:
                         self.print_log(
                         '\t|Epoch:{:>5}/{:>5}|\tIteration:{:>5}/{:>5}|\tLoss:{:.5f}|lr: {:.4f}|'.format(
@@ -144,18 +145,18 @@ class Processor():
             features,masks,mean,neighbors = batch_data
             batch_in = features,masks,neighbors
             b,t,v,c = features.shape
-            decoder_input = torch.zeros((b, 1, v, 2)).to(device) 
+            decoder_input = torch.zeros((b, 1, v, 2)).to(dev_2)
             for i in range(h_len):
                 
                 predicted,att = self.model(
-                    batch_in, h_len, device, decoder_input, False)
+                    batch_in, h_len, dev_2, decoder_input, False)
                 
                 decoder_input = torch.cat((decoder_input, predicted[:, -1:]), 1)
             
             predicted_xy=decoder_input[:, 1:].cumsum(1)
-            predicted_trajectory = predicted_xy + features[:,h_len-1:h_len, :, :2].to(device)
-            ground_truth = features[:, h_len:,:,:2].to(device) * masks[:, h_len:].to(device)
-            predict_traj = predicted_trajectory * masks[:, h_len:].to(device)
+            predicted_trajectory = predicted_xy + features[:,h_len-1:h_len, :, :2].to(dev_2)
+            ground_truth = features[:, h_len:,:,:2].to(dev_2) * masks[:, h_len:].to(dev_2)
+            predict_traj = predicted_trajectory * masks[:, h_len:].to(dev_2)
 
             error_order=2
             error=torch.abs(predict_traj - ground_truth) ** error_order
@@ -196,16 +197,16 @@ class Processor():
                 features,masks,mean,origin,neighbors = batch_data
                 batch_in = features,masks,neighbors
                 b,t,v,c = features.shape
-                decoder_input = torch.zeros((b, 1, v, 2)).to(device) 
+                decoder_input = torch.zeros((b, 1, v, 2)).to(dev_2)
                 for i in range(h_len):
 
                     predicted,att = self.model(
-                        batch_in, h_len, device, decoder_input, False)
+                        batch_in, h_len, dev_2, decoder_input, False)
                     
                     decoder_input = torch.cat((decoder_input, predicted[:, -1:]), 1)
 
                 predicted_xy=decoder_input[:, 1:].cumsum(1) 
-                predicted_trajectory = predicted_xy + features[:,h_len-1:h_len, :, :2].to(device)
+                predicted_trajectory = predicted_xy + features[:,h_len-1:h_len, :, :2].to(dev_2)
 
                 now_pred = predicted_trajectory.detach().cpu().numpy()
                 now_mean_xy = mean.detach().cpu().numpy()
